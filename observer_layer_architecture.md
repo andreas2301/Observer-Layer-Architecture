@@ -1,16 +1,16 @@
 # Observer Layer Architecture (OLA)
 
-### A Tiered Framework for Sovereign Identity and Sentinel Governance in Agentic Swarms
+**A Tiered Framework for Sovereign Identity and Sentinel Governance in Agentic Swarms**
 
 ---
 
-## Abstract
+### Abstract
 
-The Observer Layer Architecture (OLA) introduces a mandatory third tier—the Sentinel Governance Layer—into the standard orchestrator-agent model. By structurally decoupling resource provisioning from identity management, OLA provides a double-blind privacy model that preserves data sovereignty even if the orchestrator is compromised. It replaces binary governance with a graduated pipeline, shifting from deterministic rule-based arbitration to Human-In-The-Loop (HITL) escalation only for ambiguous or high-impact anomalies. This paper details the architecture's design principles, trust models, cross-tier protocols, and reference pseudocode for high-privilege, trustless multi-agent environments.
+The Observer Layer Architecture (OLA) introduces a mandatory third tier — the Sentinel Governance Layer — into the standard orchestrator-agent model. By structurally decoupling resource provisioning from identity management, OLA provides a double-blind privacy model that preserves data sovereignty even if the orchestrator is compromised. It replaces binary governance with a graduated pipeline, shifting from deterministic rule-based arbitration to Human-In-The-Loop (HITL) escalation only for ambiguous or high-impact anomalies. This paper details the architecture's design principles, trust models, cross-tier protocols, and reference pseudocode for high-privilege, trustless multi-agent environments.
 
 ---
 
-## Chapter Overview
+### Chapter Overview
 
 | # | Chapter | Focus |
 |---|---------|-------|
@@ -33,7 +33,7 @@ The Observer Layer Architecture (OLA) introduces a mandatory third tier—the Se
 
 ---
 
-## 1. Introduction
+### 1. Introduction
 
 Autonomous AI agents, capable of independent tool use and complex decision-making, are increasingly deployed in privileged host environments with access to sensitive user data. Industry reference architectures — most notably the **Microsoft Multi-Agent Reference Architecture (MARA)** — provide robust guidance for orchestrating such agents at scale, addressing concerns of modularity, agent registration, and communication patterns.
 
@@ -45,24 +45,30 @@ The **Observer Layer Architecture (OLA)** addresses both vulnerabilities by inse
 
 ---
 
-## 2. Threat Model and Assumptions
+### 2. Threat Model and Assumptions
 
 Before detailing the architecture, it is necessary to explicitly define the threat model OLA is designed to defend against, what it explicitly trusts, and what falls outside its scope. Traditional agentic systems are increasingly exposed to new threat vectors, such as compromised Model Context Protocol (MCP) marketplaces, unvetted "skills," and tools that are instantiated faster than they can be manually audited.
 
-### 2.1 Attacker Capabilities
+#### 2.1 Attacker Capabilities
+
 OLA assumes an adversary who can:
+
 - **Compromise the Orchestrator:** Gain administrative control over the Orchestrator layer, with the ability to instantiate new containers, intercept network traffic routed through the orchestrator, and inspect container memory.
 - **Inject Malicious Agents or Tools:** Leverage prompt injection, unvetted MCPs, or compromised external APIs to hijack an agent's reasoning loop.
 - **Attempt Lateral Movement:** Exploit other internal components or exfiltrate plaintext credentials if exposed.
 
-### 2.2 Trust Assumptions
+#### 2.2 Trust Assumptions
+
 OLA explicitly trusts the following:
+
 - **Operating System Capabilities:** The underlying OS/kernel correctly enforces process isolation, file permissions, and namespace boundaries (e.g., cgroups, Linux capabilities).
 - **Cryptographic Primitives:** mTLS correctly hardens point-to-point network connections, and the underlying encryption algorithms cannot be trivially bypassed. Decoupled message queuing protocols efficiently and securely route telemetry to Tier 0 without tampering.
 - **Build-Time Provenance:** Cryptographic hashes or build-time identifiers injected before container instantiation are authentic and cannot be retroactively forged.
 
-### 2.3 Out-of-Scope Threats
+#### 2.3 Out-of-Scope Threats
+
 OLA is not designed to protect against:
+
 - **Compromised Administrators:** A malicious human administrator with root access to offline keys or underlying physical infrastructure.
 - **Malicious HITL Operators:** Operators actively subverting the governance escalation pipeline to approve unauthorized actions.
 - **Hardware-Level Backdoors:** Firmware, chipset, or CPU-level (e.g., Intel ME) vulnerabilities that break OS memory isolation.
@@ -70,9 +76,9 @@ OLA is not designed to protect against:
 
 ---
 
-## 3. Architectural Context: From 2-Tier to 3-Tier
+### 3. Architectural Context: From 2-Tier to 3-Tier
 
-### The Standard 2-Tier Model
+#### The Standard 2-Tier Model
 
 Traditional enterprise multi-agent systems rely on two logical tiers:
 
@@ -96,7 +102,7 @@ Traditional enterprise multi-agent systems rely on two logical tiers:
 
 In this model, the Orchestrator acts as a **"God-process"**: it provisions containers, distributes secrets, classifies intents, and manages the full agent lifecycle. Governance decisions — when they exist — are either hardcoded into the orchestrator logic or escalated directly to a human operator, with no intermediate arbitration layer.
 
-### The OLA Paradigm Shift
+#### The OLA Paradigm Shift
 
 OLA evolves the 2-tier model by extracting identity management, behavioral surveillance, and rule-based governance into an independent tier:
 
@@ -142,7 +148,6 @@ Equally important: Tier 0's **Rule Engine** operates deterministically rather th
 - **Trust Profile:** **Knowledgeable but Powerless.** Tier 0 holds the cryptographic keys, monitors behavior, enforces governance policies, and maintains the system's immutable audit trail — but possesses no host-level installation or modification rights to avoid changes in audit files.
 - **Governance Role:** Acts as the system's autonomous decision authority. The Rule Engine evaluates every security and operational event against codified policies before determining whether automated action is sufficient or HITL escalation is required. Every evaluation and every action is recorded in an append-only audit log.
 
-
 ### Tier 1: Host Orchestrator (Infrastructure & Power)
 
 - **Responsibility:** Hardware resource allocation, container instantiation, and low-level process management.
@@ -186,6 +191,7 @@ A specialized governance service responsible for the custody and distribution of
 #### Isolation Constraints & Enforcement Mechanisms
 
 To guarantee that Tier 0 constraints are strictly enforced, OLA mandates enforcement at multiple levels:
+
 - **Process and OS Level (Minimum Requirement):** The Secret Manager and Rule Engine must run with read-only root filesystems, dropped Linux capabilities (e.g., no `CAP_SYS_ADMIN`), and strict seccomp profiles that deny execution of arbitrary binaries. These cannot be overridden by Tier 1.
 - **Hardware/Chipset Level (High Security Requirement):** For truly secure and multi-tenant applications, Tier 0 components should be isolated within hardware-backed Trusted Execution Environments (TEEs) such as Intel SGX or AMD SEV. This ensures memory cannot be probed or tampered with even by a root-level Orchestrator.
 - **Knowledge Barrier:** The Secret Manager has no awareness of underlying infrastructure or administrative identity/tasks done by the orchestrator.
@@ -405,6 +411,7 @@ sequenceDiagram
 ```
 
 **Properties:**
+
 - The wrapping token is single-use and expires after a short TTL.
 - Tier 1 transports the encrypted payload but cannot decrypt it.
 - **Direct Channel Authentication (mTLS):** The direct connection between Tier 2 and Tier 0 relies on pre-provisioned mTLS certificates baked into the container image at build time (or strictly enforced kernel-level network namespaces), ensuring the Orchestrator cannot MITM the authentication channel.
@@ -492,7 +499,7 @@ To demonstrate how the three tiers and the graduated governance pipeline interac
 3. **Tier 0 (Governance) Stage 1 Evaluation:** The Rule Engine evaluates the telemetry. It checks the destination against the `unknown_network_egress` policy constraint. Because `evil-server.com` is not in the approved domain list, the Rule Engine triggers an immediate Stage 2 response.
 4. **Tier 1 Enforcement:** The Rule Engine instructs the Orchestrator to apply immediate CPU throttling and network tarpitting (reducing bandwidth to 1kbps) to limit exfiltration speed while gathering more data. It writes this action to the Audit Log.
 5. **Tier 0 Stage 2 Correlation:** Observing the container over the next 30 seconds, the Rule Engine correlates the `unknown_network_egress` with a sudden spike in file read operations on sensitive local memory. The combined risk score exceeds the escalation threshold.
-6. **Tier 0 Escalation & Lockbox:** Because the risk score denotes a critical threat, the Rule Engine triggers the default High-Risk Breach policies: 
+6. **Tier 0 Escalation & Lockbox:** Because the risk score denotes a critical threat, the Rule Engine triggers the default High-Risk Breach policies:
     - It sends a SIGKILL to the Orchestrator to terminate the container.
     - It triggers the Lockbox Protocol, encrypting the container's final memory state with the Administrator's public key.
     - It revokes the agent's credentials via the Secret Manager.
@@ -836,5 +843,6 @@ The architecture is framework-agnostic and designed to wrap existing agentic eng
 This work is licensed under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/) (CC BY-SA 4.0).
 
 You are free to share and adapt this material for any purpose, including commercial, under the following terms:
+
 - **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
 - **ShareAlike** — If you remix, transform, or build upon this material, you must distribute your contributions under the same license.

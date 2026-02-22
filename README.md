@@ -18,13 +18,14 @@
 
 ## 📖 About
 
-The **Observer Layer Architecture (OLA)** is a framework-agnostic architectural design that extends the standard Orchestrator-Agent Swarm model (e.g., Microsoft MARA) by introducing a mandatory third tier: the **Sentinel Governance Layer** (Tier 0). 
+The **Observer Layer Architecture (OLA)** is a framework-agnostic architectural design that extends the standard Orchestrator-Agent Swarm model (e.g., Microsoft MARA) by introducing a mandatory third tier: the **Sentinel Governance Layer** (Tier 0).
 
 By strictly decoupling resource provisioning from identity management, OLA creates a "Double-Blind" privacy model that guarantees data sovereignty. It ensures that no single compromised tier—not even the core orchestrator—can both orchestrate processes and access plaintext secrets.
 
 ## 🚀 Why This Matters Right Now
 
 As autonomous agents become deeply integrated into enterprise systems:
+
 1. **The Orchestrator is a Single Point of Failure:** In standard 2-tier setups, the "God-process" orchestrator holds both compute and credential keys. If it falls, the entire system is breached.
 2. **Untrusted Tool Ecosystems:** Agents rely on Model Context Protocols (MCPs) and marketplace skills. Vetting these in real-time is impossible.
 3. **Overwhelmed Humans:** Binary "allow/deny" guardrails either fail to stop novel threats or spam human operators with false positives.
@@ -44,16 +45,7 @@ We encourage security engineers, AI architects, and academic researchers to read
 
 👉 **[Read the Full Specification (`observer_layer_architecture.md`)](./observer_layer_architecture.md)**
 
-## 🏆 GitHub Repository SEO & Optimization
-
-*(Note: If you are setting up this repository, ensure you use the following strategies for better discoverability.)*
-
-### Recommended Repository Topics (Tags)
-Add these tags to your repository settings (the gear icon on your repo's main page) to ensure it appears in developer searches:
-`multi-agent-systems` `zero-trust` `ai-security` `mcp` `mara` `semantic-kernel` `cybersecurity` `agentic-ai` `architecture-patterns`
-
-### Recommended Repository Description (About section)
-> "A Zero-Trust, 3-Tier Multi-Agent Reference Architecture (OLA) decoupling resource orchestration from identity governance to secure sovereign AI systems."
+`multi-agent-systems` `zero-trust` `ai-security` `mcp` `mara` `semantic-kernel` `cybersecurity` `agentic-ai` `architecture-patterns` `openclaw` `moltbot` `claude` `openai` `gemini`
 
 ## 📚 Citation
 
