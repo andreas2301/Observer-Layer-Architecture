@@ -35,11 +35,16 @@ The Observer Layer Architecture (OLA) introduces a mandatory third tier — the 
 
 ### 1. Introduction
 
+#### The God-Process and the Limits of 2-Tier Models
 Autonomous AI agents, capable of independent tool use and complex decision-making, are increasingly deployed in privileged host environments with access to sensitive user data. Industry reference architectures — most notably the **Microsoft Multi-Agent Reference Architecture (MARA)** — provide robust guidance for orchestrating such agents at scale, addressing concerns of modularity, agent registration, and communication patterns.
 
-However, these architectures typically operate under a **2-tier trust model** in which a single orchestrator holds both infrastructure control _and_ identity custody. If the orchestrator is compromised, the entire credential stack — and therefore all downstream agent identities — is exposed. Furthermore, governance in such systems often defaults to one of two extremes: either fully automated responses with no human oversight, or constant human approval that bottlenecks the system.
+However, these architectures typically operate under a **2-tier trust model** in which a single orchestrator acts as a "God-process," holding both infrastructure control _and_ identity custody. If the orchestrator is compromised, the entire credential stack — and therefore all downstream agent identities — is exposed. Furthermore, governance in such systems often defaults to one of two extremes: either fully automated responses with no human oversight, or constant human approval that bottlenecks the system.
 
-The **Observer Layer Architecture (OLA)** addresses both vulnerabilities by inserting a mandatory third tier above the orchestrator who controls the agent swarm: the **Sentinel Governance Layer**. This layer fundamentally **decouples resource provisioning (power) from identity management (knowledge)**, establishing a double-blind privacy model that preserves data sovereignty even in the event of an orchestrator compromise. Critically, it implements a **graduated governance pipeline** — automated rule-based decisions handle the majority of operational events, with Human-In-The-Loop (HITL) escalation reserved as the final authority for ambiguous or high-impact scenarios.
+#### The Trust Calibration Problem
+Relying heavily on human oversight or UI-level guardrails exposes a fundamental psychological vulnerability. Recent empirical research (He et al., 2025) demonstrates that users systematically over-trust LLM-generated plans that appear plausible but contain critical errors, with calibrated trust averaging significantly lower than expected. Agents that perform well under ideal conditions can inadvertently exploit human trust biases under adversarial ones. User involvement in plan review imposes high cognitive load while failing to reliably improve trust calibration, demonstrating that the "double-edged sword" of intelligent agents cannot be resolved merely through user-interface modifications.
+
+#### The OLA Paradigm Shift
+The **Observer Layer Architecture (OLA)** addresses these vulnerabilities by moving governance from UI-level trust calibration down to infrastructure-level isolation. OLA inserts a mandatory third tier above the orchestrator who controls the agent swarm: the **Sentinel Governance Layer**. This layer fundamentally **decouples resource provisioning (power) from identity management (knowledge)**, establishing a double-blind privacy model that preserves data sovereignty even in the event of an orchestrator compromise. Critically, it implements a **graduated governance pipeline** — automated rule-based decisions handle the majority of operational events, with Human-In-The-Loop (HITL) escalation reserved as the final authority for ambiguous or high-impact scenarios.
 
 > This document describes the mechanisms of OLA at an abstract, framework-agnostic level. It is intended to complement — not replace — existing reference architectures by specifying the additional structural guarantees required for sovereign and trustless agent hosting.
 
@@ -63,7 +68,9 @@ OLA explicitly trusts the following:
 
 - **Operating System Capabilities:** The underlying OS/kernel correctly enforces process isolation, file permissions, and namespace boundaries (e.g., cgroups, Linux capabilities).
 - **Cryptographic Primitives:** mTLS correctly hardens point-to-point network connections, and the underlying encryption algorithms cannot be trivially bypassed. Decoupled message queuing protocols efficiently and securely route telemetry to Tier 0 without tampering.
-- **Build-Time Provenance:** Cryptographic hashes or build-time identifiers injected before container instantiation are authentic and cannot be retroactively forged.
+- **Root-of-Trust Bootstrap (Hardware Attestation vs. Build-Time IDs):** The mechanism the Tier 0 Secret Manager uses to identify a newly instantiated Tier 2 container. 
+  - *Optimal:* **Hardware-Backed Cryptographic Attestation (TEE/TPM).** The physical hardware signs a cryptographic measurement (quote) proving the exact container binary running in isolated memory. Tier 0 verifies this signature before dispensing a credential. This prevents a compromised Tier 1 Orchestrator from extracting secrets by entirely excluding it from identity verification.
+  - *Constrained environments:* **Build-Time Provenance.** Cryptographic hashes or build-time trusted IDs injected before container instantiation. While effective against external threats, this requires trusting that Tier 1 cannot intercept or forge these identities during instantiation.
 
 #### 2.3 Out-of-Scope Threats
 
@@ -192,9 +199,12 @@ A specialized governance service responsible for the custody and distribution of
 
 To guarantee that Tier 0 constraints are strictly enforced, OLA mandates enforcement at multiple levels:
 
+
 - **Process and OS Level (Minimum Requirement):** The Secret Manager and Rule Engine must run with read-only root filesystems, dropped Linux capabilities (e.g., no `CAP_SYS_ADMIN`), and strict seccomp profiles that deny execution of arbitrary binaries. These cannot be overridden by Tier 1.
 - **Hardware/Chipset Level (High Security Requirement):** For truly secure and multi-tenant applications, Tier 0 components should be isolated within hardware-backed Trusted Execution Environments (TEEs) such as Intel SGX or AMD SEV. This ensures memory cannot be probed or tampered with even by a root-level Orchestrator.
+- **Immutable Identity (Soul Hardening):** Should an Agent instead of deterministic code be used: Core identity files for sensitive governance components are frozen at the OS level using read-only permissions and root-ownership. This prevents malicious modifications even if the host session experiences privilege escalation.
 - **Knowledge Barrier:** The Secret Manager has no awareness of underlying infrastructure or administrative identity/tasks done by the orchestrator.
+- **Resource Exhaustion Defense (Anti-DDoS):** To prevent a compromised Orchestrator from starving Tier 0 of compute resources (e.g., flooding it with fake identity claims or telemetry bursts), all ingest interfaces implement strict, source-agnostic rate limiting and circuit breakers, ensuring the core governance loops remain responsive under duress.
 
 ### 5.2 Rule Engine (Policy Arbitration & Behavioral Surveillance)
 
@@ -224,7 +234,7 @@ The Rule Engine processes events through a strict resolution hierarchy:
 1. **Auto-Resolve:** Event matches a known-benign pattern or falls within baseline thresholds → no action.
 2. **Auto-Mitigate:** Event matches a codified threat pattern with a defined automated response → execute mitigation (throttle, quarantine, kill).
 3. **Defer & Observe:** Event is ambiguous; does not match known patterns → apply temporary containment, extend observation window, re-evaluate.
-4. **Escalate to HITL:** Event exceeds risk thresholds, contradicts existing policies, or persists beyond the observation window → package forensic context and escalate to the human operator for final decision.
+4. **Hierarchical HITL Escalation (L1 Triage):** Event exceeds risk thresholds. To prevent **Alert Fatigue** (where an operator is overwhelmed by thousands of low-signal approvals and defaults to blind trust), escalation is managed by an L1 Triage Model. Operators can deploy context-aware deterministic whitelisting (approving a specific context once, causing identical future events to auto-resolve). *Future extensions may utilize specialized Machine Learning classifiers trained on past HITL decisions to suggest or automatically resolve low-risk ambiguities. Therefore, a strict impact classification of approval requests is necessary. Critically, to preserve Tier 0's deterministic guarantee, any such ML model acts strictly as an advisory system—it is never granted autonomous authority to issue kill signals or revoke credentials. (High impact)* The human operator remains the final authority.
 
 #### Isolation Constraints
 
@@ -272,7 +282,7 @@ Each audit entry contains:
 
 ## 6. The Service Layer: Agent Swarm
 
-Tier 2 maps directly to the standard **Orchestrated Agent Swarm** pattern defined in architectures such as Microsoft MARA, with the orchestration function residing in Tier 1. This is the operational environment where user-facing task execution occurs.
+Tier 2 maps directly to the standard **Orchestrated Agent Swarm** pattern defined in architectures such as Microsoft MARA, where MARA spans Tier 1 (Orchestration) and Tier 2 (Execution). This is the operational environment where user-facing task execution occurs.
 
 OLA deliberately does not prescribe specific agent topologies, memory structures, or routing mechanisms for Tier 2. Whether the swarm employs a single monolithic orchestrator agent, a hierarchical registry, or a decentralized network of specialized domain actors is orthogonal to the governance model.
 
@@ -388,6 +398,16 @@ This feedback loop ensures the system becomes progressively more autonomous over
 
 ## 8. Cross-Tier Interaction Protocols
 
+### 8.0 Network Isolation (Dual-Bus Topology)
+
+Before detailing the algorithmic protocols, it is critical to observe the physical network constraints. OLA enforces a tiered privilege model via isolated network segments (e.g., a high-security management zone with no internet access for Tier 0, and a restricted operational zone for Tier 1 and Tier 2). 
+
+A key infrastructural realization of this isolation is the **Dual Message Bus topology**. Rather than relying on virtual isolation (such as RabbitMQ vHosts) on a shared message broker, OLA mandates **complete physical or container-level separation** of the messaging networks based on their purpose:
+1. **The Governance Broker (Tier 0 ↔ Tier 1 & 2):** A dedicated, highly secure message broker (e.g., an entirely separate RabbitMQ Docker stack) that handles all telemetry from Tier 1 to Tier 0, and all containment signals from Tier 0 to Tier 1. It also handles direct identity claims from Tier 2 to Tier 0.
+2. **The Operational Broker (Tier 1 ↔ Tier 2):** A completely distinct, unprivileged message broker network utilized for swarm execution (e.g., task queuing, tool use, LLM requests).
+
+Crucially, **Tier 0 remains strictly isolated on the Governance network**. It is **Tier 1 (The Orchestrator)** that must connect to both networks — routing its telemetry up to Tier 0 securely, while managing the agents down on the Operational Broker. Tier 1 never blindly forwards packets between the two buses.
+
 ### 8.1 Double-Blind Secret Delivery
 
 The mechanism that ensures the Orchestrator (Tier 1) never observes plain-text credentials, even though it physically instantiates and orchestrates the transport channel.
@@ -395,18 +415,18 @@ The mechanism that ensures the Orchestrator (Tier 1) never observes plain-text c
 ```mermaid
 sequenceDiagram
     participant T2 as Tier 2: New Agent
-    participant T0 as Tier 1: Orchestrator
+    participant T1 as Tier 1: Orchestrator
     participant SM as Tier 0: Secret Manager
     participant Vault as Encrypted Vault
 
-    T0->>T2: 1. Instantiate container with build-time Trusted ID
+    T1->>T2: 1. Instantiate container with build-time Trusted ID
     T2->>SM: 2. Claim identity via secured channel (Trusted ID)
     SM->>Vault: 3. Request wrapped credential
     Vault-->>SM: 4. Return response-wrapped token (single-use, TTL-bound)
     SM-->>T2: 5. Deliver wrapped token (opaque to Tier 1)
     T2->>Vault: 6. Unwrap token directly (one-time consumption)
     SM->>SM: 7. Write credential event to Audit Log
-    Note over T0: Tier 1 transported the container<br/>but never saw the credential
+    Note over T1: Tier 1 transported the container<br/>but never saw the credential
     Note over SM: Every credential operation is<br/>recorded in the immutable Audit Log
 ```
 
@@ -455,18 +475,20 @@ sequenceDiagram
     end
 ```
 
-### 8.3 The Lockbox Protocol
+### 8.3 Emergency Protocols: The Lockbox and the Dead Man's Switch
 
-A resilient safe-fail mechanism that replaces standard binary "delete-on-breach" triggers with a recovery-oriented encryption protocol.
+A resilient safe-fail mechanism replaces standard binary "delete-on-breach" triggers with a recovery-oriented encryption and restoration protocol.
 
-**How it works:** Upon confirmed high-risk breach detection — whether triggered autonomously by the Rule Engine or authorized by the human operator after HITL escalation — the system:
+**The Dead Man's Switch Engine:** Upon confirmed high-risk breach detection — whether triggered autonomously by the Rule Engine, authorized by the human operator, or engaged via loss of a periodic external heartbeat — the system:
 
 1. **Terminates** all compromised Tier 2 processes (SIGKILL).
-2. **Archives** all associated container volumes and runtime state.
-3. **Encrypts** the archived data using the administrator's offline public key (asymmetric encryption).
+2. **Archives** all associated container volumes, memory, and runtime state.
+3. **Encrypts** the archived data using the administrator's offline public key (asymmetric encryption) and systematically shreds the original plaintext state.
 4. **Seals** the result as a "Lockbox" — a self-contained, encrypted forensic package.
 
-The Lockbox preserves data sovereignty: the encrypted archive can only be opened by the administrator's private key, which is never stored on the system. This ensures that forensic evidence is preserved for post-incident analysis while preventing exfiltration by an attacker who has gained system access.
+The Lockbox preserves data sovereignty: the encrypted archive can only be opened by the administrator's private key, which is never stored on the system. This ensures that forensic evidence is preserved for post-incident analysis while preventing exfiltration by an attacker who has gained active persistence in the environment.
+
+**The Disaster Recovery Engine:** To reverse the locked state, an authorized administrator provides an offline private key out-of-band to decrypt the Lockbox. The recovery protocol systematically decrypts states and restarts services in strict dependency order, rigorously prioritizing the root of trust (Tier 0) before re-instantiating the Orchestrator (Tier 1) and authorizing the Agent Swarm (Tier 2). Currently, Lockbox engagement represents a full halt to the compromised workflow. Future iterations of OLA will explore **Stateful Agent Rollbacks**, enabling the recovery engine to use deterministic memory snapshots to rewind an agent to its last known good state prior to the anomaly, preserving partial task progress.
 
 ---
 
@@ -483,7 +505,7 @@ The following principles guide the structural decisions of OLA. They extend the 
 | **Comprehensive Auditability** | Every secret access, policy evaluation, governance decision, and HITL interaction is recorded in an immutable, append-only audit log with cryptographic chaining. No operation within Tier 0 is permitted without a corresponding audit entry (Microsoft Purview Audit, 2024; NIST SP 800-92). |
 | **Deterministic Substitution** | Procedural logic is offloaded from stochastic LLM processes to deterministic, containerized workers. This reduces cost, eliminates non-determinism in critical paths, and improves auditability. |
 | **Resilient Safe-Fail** | Breach response prioritizes data preservation over data destruction. The Lockbox protocol ensures forensic recoverability without enabling exfiltration. |
-| **Empirical Baselining** | Resource and behavioral thresholds are derived from measured calibration periods, not static assumptions. This minimizes false-positive security triggers. |
+| **Empirical Baselining** | Resource and behavioral thresholds are derived from measured calibration periods, not static assumptions. To prevent massive false positives on Day 1, containers enter an initial "Learning Mode" where anomalies are audited but do not trigger autonomous containment until statistical confidence is established. |
 | **Progressive Autonomy** | The governance feedback loop enables the system to learn from HITL decisions by codifying new rules, progressively reducing the need for human escalation over time. |
 
 ---
@@ -559,6 +581,20 @@ Microsoft's MARA provides comprehensive guidance for building scalable multi-age
 ### 12.2 NIST AI 100-2 and SP 800-190
 
 OLA adheres to NIST SP 800-190 (Application Container Security Guide) for container-level isolation and resource enforcement. The tiered trust model extends the NIST AI 100-2 framework for adversarial machine learning by addressing infrastructure-level attack vectors beyond the model layer.
+
+### 12.3 Plan-Then-Execute (He et al., 2025)
+
+Empirical research by He et al. (CHI 2025) establishes that LLM agents operating in a plan-then-execute paradigm present a "double-edged sword": users systematically over-trust plausible yet flawed plans. OLA extends this work from single-agent UI patterns to multi-agent infrastructure enforcement. Where He et al. observe the limits of user trust calibration at the interface level, OLA replaces UI-level trust with architectural isolation. Furthermore, the architecture codifies their recommendation for "context-dependent involvement" not merely as a UI toggle, but as an infrastructure-level policy engine with automatic risk-based escalation (e.g., auto-approve, alert, mandatory human-in-the-loop).
+
+### 12.4 Security-Usability Trade-offs and Opt-In Cryptographic Proofs
+
+A common extension in high-security architectures is the generation of External Cryptographic Attestations (e.g., Zero-Knowledge Receipts) to prove to end-users that an agent's response was governed securely and not tampered with. However, OLA mandates that such mechanisms remain strictly **opt-in**.
+
+Academic literature on the "security-usability trade-off" consistently demonstrates that users systematically prioritize simplicity and convenience over strict security overhead. As Kirlappos et al. and other researchers note, imposing complex verification steps (like managing cryptographic receipts or hardware tokens) creates friction that reduces overall task efficiency and user adoption—often paradoxically leading to users bypassing the security entirely. Because OLA provides structural, internal guarantees via the Audit Log and double-blind isolation, shifting the verification burden to the end-user via mandatory external proofs introduces unnecessary usability overhead. Therefore, consumer-facing cryptographic attestations should be reserved as an optional toggle for highly sensitive enterprise configurations, while the default user experience remains frictionless. However, for environments demanding rigorous external verification (External Zero Trust), Tier 0 can optionally generate Remote Attestation Quotes verifiable by an independent audit server, providing mathematically provable architectural integrity to external clients without burdening the end-user.
+
+### 12.5 arc42 Architecture Standard
+
+The architectural documentation and framework modeling of OLA adhere to the principles of the arc42 structural template, utilizing formal separation of concepts.
 
 ---
 
@@ -835,6 +871,7 @@ The architecture is framework-agnostic and designed to wrap existing agentic eng
 4. NIST SP 800-57, "Recommendation for Key Management," May 2020.
 5. Microsoft, "Multi-Agent Reference Architecture (MARA)," 2025.
 6. Microsoft Purview Compliance, "Microsoft Purview Audit," 2024.
+7. He, G., Demartini, G., & Gadiraju, U. (2025). "Plan-Then-Execute: An Empirical Study of User Trust and Team Performance When Using LLM Agents As A Daily Assistant." CHI 2025. https://arxiv.org/abs/2502.01390
 
 ---
 
