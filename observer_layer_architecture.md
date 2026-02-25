@@ -560,7 +560,7 @@ sequenceDiagram
 
     RE->>RE: 12. Log request evaluation to Audit Log
 
-    Note over RE: Rule Engine continuously evaluates<br/>all telemetry; escalates to HITL only<br/>when policy boundaries are exceeded
+    Note over RE: Rule Engine continuously evaluates<br/>all telemetry, escalates to HITL only<br/>when policy boundaries are exceeded
     Note over T1: Orchestrator provides compute and<br/>routing but observes no secrets
     Note over RE: Every governance decision is recorded<br/>in the immutable Tier 0 Audit Log
 ```
